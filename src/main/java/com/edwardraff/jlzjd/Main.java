@@ -18,8 +18,6 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import java.util.Random;
-import jsat.math.OnLineStatistics;
 
 
 /**
@@ -111,7 +109,7 @@ public class Main
                 j_start = i+1;//don't self compare / repeat comparisons
             for(int j = j_start; j < hashesB.size(); j++)
             {
-                int sim = (int) Math.round(100*LZJD.similarity(hAiH, hashesB.get(j)));
+                int sim = (int) Math.round(100*LZJDf.similarity(hAiH, hashesB.get(j)));
                 if(sim >= threshold)
                     System.out.printf(hAiN + "|" + filesB.get(j) + "|%03d\n", sim);
             }
@@ -150,8 +148,8 @@ public class Main
         byte[] byte_tmp_space = new byte[minhashSize*Integer.BYTES];
         for(File f : toHash)
         {
-            LZJD.min_hashes.clear();//hacky, but I don't really care
-            int[] hash = LZJD.getMinHash(-1, f, (int) Math.min(minhashSize, f.length()/2));
+            LZJDf.min_hashes.clear();//hacky, but I don't really care
+            int[] hash = LZJDf.getMinHash(-1, f, (int) Math.min(minhashSize, f.length()/2));
             
             ByteBuffer byteBuffer = ByteBuffer.wrap(byte_tmp_space);
             IntBuffer intBuffer = byteBuffer.asIntBuffer();
@@ -169,8 +167,8 @@ public class Main
         
         for(File f : toHash)
         {
-            LZJD.min_hashes.clear();//hacky, but I don't really care
-            int[] hash = LZJD.getMinHash(-1, f, minhashSize);
+            LZJDf.min_hashes.clear();//hacky, but I don't really care
+            int[] hash = LZJDf.getMinHash(-1, f, minhashSize);
             hashes.add(hash);
             names.add(f.toString());
         }

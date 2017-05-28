@@ -1,15 +1,16 @@
-
 package com.edwardraff.jlzjd;
 
 
+import com.google.common.collect.Ordering;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -34,6 +35,7 @@ public class LZJDf implements DistanceMetric, KernelTrick
     static final AtomicInteger file_counter = new AtomicInteger();
     static final ConcurrentMap<Integer, int[]> min_hashes = new ConcurrentHashMap<>();
     static ThreadLocal<HashSet<ByteBuffer>> localSets = ThreadLocal.withInitial(() -> new HashSet<>());
+    static ThreadLocal<byte[]> localByteBuffer = ThreadLocal.withInitial(() -> new byte[4*1024]);
     public static int min_hash_size = 1024;
     
     /**
@@ -45,57 +47,61 @@ public class LZJDf implements DistanceMetric, KernelTrick
      * @param x_set
      * @return
      */
-    private static List<Integer> fillByteSetLZasInts(byte[] x_bytes, int length, Set<ByteBuffer> x_set)
+    private static List<Integer> getAllHashes(long minFileLen, InputStream is) throws IOException
     {
-
         IntList ints = new IntList();
-        int last_pos = 0;
-        int pos = 1;
-        int max_len = 0;
-        x_set.clear();
-        while(pos < length)
+        IntSetNoRemove x_set = new IntSetNoRemove((int) (minFileLen), 0.65f);
+        MurmurHash3 running_hash = new MurmurHash3();
+        int pos = 0;
+        int end = 0;
+        byte[] buffer = localByteBuffer.get();
+
+        while(true)
         {
-            ByteBuffer sub_seq = ByteBuffer.wrap(x_bytes, last_pos, pos-last_pos);
-            if(x_set.add(sub_seq))//true if sub_seq wasn't already in it
+            if(end == pos)//we need more bytes!
             {
-                ints.add(MurmurHash3.murmurhash3_x86_32(x_bytes, last_pos, pos-last_pos));
-                max_len = Math.max(max_len, pos-last_pos);
-                last_pos = pos;
+                end = is.read(buffer);
+                if(end < 0)
+                    break;//EOF, we are done
+                pos = 0;
             }
-            pos++;
+            //else, procceed
+            int hash = running_hash.pushByte(buffer[pos++]);
+            if(x_set.add(hash))
+            {//never seen it before, put it in!
+                ints.add(hash);
+                running_hash.reset();
+            }
         }
         return ints;
-    }
-    
-    private static List<Integer> fillByteSetLZasInts(byte[] x_bytes, Set<ByteBuffer> x_set)
-    {
-        return fillByteSetLZasInts(x_bytes, x_bytes.length, x_set);
     }
     
     /**
      * Obtains a min-hash set for the given input file
      * @param indx the unique index assigned for this file
-     * @param x_file the file to get the LZJD min-hash of
+     * @param x_file the file to get the LZJDf min-hash of
      * @param min_hash_size the max size for the min-hash
      * @return an int array of the min-hash values in sorted order
      * @throws IOException 
      */
-    private static int[] getMinHash(int indx, File x_file, int min_hash_size) throws IOException
+    protected static int[] getMinHash(int indx, File x_file, int min_hash_size) throws IOException
     {
         int[] x_minset = min_hashes.get(indx);
         if(x_minset == null)
         {
-            byte[] x_bytes = Files.readAllBytes(x_file.toPath());
-            
-            List<Integer> hashes = fillByteSetLZasInts(x_bytes, localSets.get());
-            Collections.sort(hashes);
-            
-            x_minset = new int[Math.min(min_hash_size, hashes.size())];
-            for(int i = 0; i < x_minset.length; i++)
-                x_minset[i] = hashes.get(i);
-            
-            
-            min_hashes.putIfAbsent(indx, x_minset);
+            try(FileInputStream fis = new FileInputStream(x_file))
+            {
+                List<Integer> hashes = getAllHashes(x_file.length(), fis);
+
+                hashes = Ordering.natural().leastOf(hashes, Math.min(min_hash_size, hashes.size()));
+
+                x_minset = new int[hashes.size()];
+                for(int i = 0; i < x_minset.length; i++)
+                    x_minset[i] = hashes.get(i);
+                Arrays.sort(x_minset);
+
+                min_hashes.putIfAbsent(indx, x_minset);
+            }
         }
         
         return x_minset;
@@ -127,6 +133,32 @@ public class LZJDf implements DistanceMetric, KernelTrick
 
        
         return new DataPoint(dv);
+    }
+    
+    /**
+     * Obtains a DataPoint object for the given file, which stores a representation that can be used with this distance metric
+     * @param f the file to get a min-hash for
+     * @return a DataPoint that will correspond to the given file 
+     */
+    public static int[] getMHforFile(File f)
+    {
+        int id;
+
+        id = file_counter.getAndIncrement();
+        files.put(f, id);
+       
+        DenseVector dv = new DenseVector(1);
+        dv.set(0, id);
+
+        try 
+        {
+            return getMinHash(id, f, min_hash_size);
+        }
+        catch (IOException ex) 
+        {
+            Logger.getLogger(LZJDf.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return new int[0];
     }
     
 
@@ -184,26 +216,7 @@ public class LZJDf implements DistanceMetric, KernelTrick
             int[] x_minset = getMinHash(x, null, min_hash_size);
             int[] y_minset = getMinHash(y, null, min_hash_size);
 
-            int same = 0;
-            
-            int x_pos = 0, y_pos = 0;
-            while(x_pos < x_minset.length && y_pos < y_minset.length)
-            {
-                int x_v = x_minset[x_pos];
-                int y_v = y_minset[y_pos];
-                if(x_v == y_v)
-                {
-                    same++;
-                    x_pos++;
-                    y_pos++;
-                }
-                else if(x_v < y_v)
-                    x_pos++;
-                else
-                    y_pos++;
-            }
-
-            return 1.0 - same / (double) (x_minset.length + y_minset.length - same);
+            return dist(x_minset, y_minset);
 
         }
         catch (IOException ex)
@@ -212,6 +225,35 @@ public class LZJDf implements DistanceMetric, KernelTrick
         }
        
         return 1;
+    }
+
+    public static double dist(int[] x_minset, int[] y_minset)
+    {
+        double sim = similarity(x_minset, y_minset);
+        return 1.0 - sim;
+    }
+
+    public static double similarity(int[] x_minset, int[] y_minset)
+    {
+        int same = 0;
+        int x_pos = 0, y_pos = 0;
+        while(x_pos < x_minset.length && y_pos < y_minset.length)
+        {
+            int x_v = x_minset[x_pos];
+            int y_v = y_minset[y_pos];
+            if(x_v == y_v)
+            {
+                same++;
+                x_pos++;
+                y_pos++;
+            }
+            else if(x_v < y_v)
+                x_pos++;
+            else
+                y_pos++;
+        }
+        double sim = same / (double) (x_minset.length + y_minset.length - same);
+        return sim;
     }
  
     @Override
