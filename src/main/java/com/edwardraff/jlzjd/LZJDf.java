@@ -38,19 +38,20 @@ public class LZJDf implements DistanceMetric, KernelTrick
     static ThreadLocal<byte[]> localByteBuffer = ThreadLocal.withInitial(() -> new byte[4*1024]);
     public static int min_hash_size = 1024;
     
+    static final ThreadLocal<IntList> LOCAL_INT_LIST = ThreadLocal.withInitial(()->new IntList());
+    static final ThreadLocal<IntSetNoRemove> LOCAL_X_SET = ThreadLocal.withInitial(()->new IntSetNoRemove(1024, 0.65f));
+    
     /**
      * Fills a set of ByteBuffers according the the LZ algorithm. Returns the
      * set as a list of unique integer hashes found.
      *
-     * @param x_bytes
-     * @param length
-     * @param x_set
-     * @return
+     * @param ints the location t store all of the integer hashes of the sub-sequences
+     * @param is the byte source to hash
      */
-    private static List<Integer> getAllHashes(long minFileLen, InputStream is) throws IOException
+    private static void getAllHashes(IntList ints, InputStream is) throws IOException
     {
-        IntList ints = new IntList();
-        IntSetNoRemove x_set = new IntSetNoRemove((int) (minFileLen), 0.65f);
+        IntSetNoRemove x_set = LOCAL_X_SET.get();
+        x_set.clear();
         MurmurHash3 running_hash = new MurmurHash3();
         int pos = 0;
         int end = 0;
@@ -73,7 +74,6 @@ public class LZJDf implements DistanceMetric, KernelTrick
                 running_hash.reset();
             }
         }
-        return ints;
     }
     
     /**
@@ -91,13 +91,14 @@ public class LZJDf implements DistanceMetric, KernelTrick
         {
             try(FileInputStream fis = new FileInputStream(x_file))
             {
-                List<Integer> hashes = getAllHashes(x_file.length(), fis);
+                IntList hashes = LOCAL_INT_LIST.get();
+                getAllHashes(hashes, fis);
 
-                hashes = Ordering.natural().leastOf(hashes, Math.min(min_hash_size, hashes.size()));
+                List<Integer> sub_hashes = Ordering.natural().leastOf(hashes, Math.min(min_hash_size, hashes.size()));
 
-                x_minset = new int[hashes.size()];
+                x_minset = new int[sub_hashes.size()];
                 for(int i = 0; i < x_minset.length; i++)
-                    x_minset[i] = hashes.get(i);
+                    x_minset[i] = sub_hashes.get(i);
                 Arrays.sort(x_minset);
 
                 min_hashes.putIfAbsent(indx, x_minset);
