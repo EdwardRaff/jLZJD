@@ -92,6 +92,7 @@ public class LZJDf implements DistanceMetric, KernelTrick
             try(FileInputStream fis = new FileInputStream(x_file))
             {
                 IntList hashes = LOCAL_INT_LIST.get();
+                hashes.clear();
                 getAllHashes(hashes, fis);
 
                 List<Integer> sub_hashes = Ordering.natural().leastOf(hashes, Math.min(min_hash_size, hashes.size()));
