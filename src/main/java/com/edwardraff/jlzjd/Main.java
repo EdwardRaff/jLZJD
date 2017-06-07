@@ -45,8 +45,8 @@ public class Main
     /**
      * This will hold the indexes we are supposed to compare
      */
-    @Parameter(names = { "-c", "--compare" }, description = "compare all pairs in SDBF file, or compare two SDBF files to each other", converter = FileConverter.class)
-    private List<File> toCompare = new ArrayList<>();
+    @Parameter(names = { "-c", "--compare" }, description = "compare all pairs in SDBF file, or compare two SDBF files to each other")
+    private boolean toCompare = false;
     
     /**
      * This will hold default inputs we should parse
@@ -99,9 +99,9 @@ public class Main
             else if(candidate.isDirectory() && goDeep)
                 Files.walk(candidate.toPath()).filter(Files::isRegularFile).forEach(c -> toHash.add(c.toFile()));
         
-        if(!toCompare.isEmpty())
+        if(toCompare)
         {
-            if(toCompare.size() > 2)
+            if(parameters.size() > 2 || parameters.isEmpty())
                 throw new IllegalArgumentException("Can only compare at most two indexes at a time!");
             
             List<int[]> hashesA = new ArrayList<>();
@@ -110,9 +110,9 @@ public class Main
             List<int[]> hashesB = new ArrayList<>();
             List<String> filesB = new ArrayList<>();
             
-            readHashesFromFile(toCompare.get(0), hashesA, filesA);
-            if(toCompare.size() == 2)
-                readHashesFromFile(toCompare.get(1), hashesA, filesA);
+            readHashesFromFile(parameters.get(0), hashesA, filesA);
+            if(parameters.size() == 2)
+                readHashesFromFile(parameters.get(1), hashesB, filesB);
             else
             {
                 hashesB = hashesA;
