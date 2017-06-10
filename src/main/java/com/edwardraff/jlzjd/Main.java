@@ -3,10 +3,7 @@ package com.edwardraff.jlzjd;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.converters.FileConverter;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.file.Files;
@@ -47,6 +44,9 @@ public class Main
      */
     @Parameter(names = { "-c", "--compare" }, description = "compare all pairs in SDBF file, or compare two SDBF files to each other")
     private boolean toCompare = false;
+    
+    @Parameter(names = { "-o", "--output" }, description = "send output to files", converter = FileConverter.class)
+    public File alt_output = new File("");
     
     /**
      * This will hold default inputs we should parse
@@ -90,6 +90,8 @@ public class Main
         JCommander jc = new JCommander(this);
         jc.parse(args);
         ex = Executors.newWorkStealingPool(Math.max(1, threads));
+        if(!alt_output.getPath().equals(""))
+            System.setOut(new PrintStream(new BufferedOutputStream(new FileOutputStream(alt_output)), true));
         
         //collect all the files we will be hashing
         List<File> toHash = new ArrayList<>();
