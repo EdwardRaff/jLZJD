@@ -14,7 +14,7 @@
         <dependency>
             <groupId>com.edwardraff</groupId>
             <artifactId>JSAT</artifactId>
-            <version>0.0.7</version>
+            <version>0.0.8</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
@@ -37,11 +37,6 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <version>21.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.baqend</groupId>
-            <artifactId>bloom-filter</artifactId>
-            <version>1.0.7</version>
         </dependency>
     </dependencies>
     <build>
